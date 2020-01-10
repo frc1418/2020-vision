@@ -43,7 +43,7 @@ class Pipeline:
 
     @staticmethod
     def __find_vecs(img_points):
-        # TODO: Insert real life point values
+        # TODO: Insert real life point values. Units: feet
         real_points = np.float32([[-1.3, 0, 0], [1.3, 0, 0], [0.5, -1.5, 0], [-0.5, -1.5, 0]])
 
         return cv2.solvePnP(
@@ -82,52 +82,30 @@ class Pipeline:
 
         # cv2.drawContours(source0, [contour], -1, (0, 255, 0), 3)
 
+        bottomLeft = np.roll(approx, -1, axis=0)[0][0]
+        bottomRight = np.roll(approx, -2, axis=0)[0][0]
+
         # Find moments
-        M = cv2.moments(contour)
-        cx = int(M['m10']/M['m00'])
-        cy = int(M['m01']/M['m00'])
 
-        left = 0
-        right = 0
-        bottom = 0
+        # M = cv2.moments(contour)
+        # cx = int(M['m10']/M['m00'])
+        # cy = int(M['m01']/M['m00'])
 
-        for row in approx:
-            point = row[0]
-            if point[0] < left:
-                left = point[0]
-            if point[0] > right:
-                right = point[0]
-            if point[1] > bottom:
-                bottom = point[1]
-        
-        bRight = 0
-        bLeft = 0
-        rBottom = 0
-        lBottom = 0
-        for row in approx:
-            point = row[0]
-            if point[1] > bottom - 5:
-                if point[0] < left + cx:
-                    bLeft = point[0]
-                    lBottom = point[1]
-                if point[0] > right - cx:
-                    bRight = point[0]
-                    rBottom = point[1]
-
-
-        # cv2.drawMarker(source0, (bRight, rBottom), (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, (bLeft, lBottom), (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, tuple(bottomRight), (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, tuple(bottomLeft), (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, leftmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, rightmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, (31, 70), (0, 255, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # Now show the image
         # cv2.imshow('Output', source0)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
+
         # top left, top right, bottom right, bottom left
-        return contour, (leftmost, rightmost, (bRight, rBottom), (bLeft, lBottom))
+        return contour, (leftmost, rightmost, bottomRight, bottomLeft)
 
     @staticmethod
-    def __hsv_threshold(inputt, hue, sat, val):
+    def __hsv_threshold(source, hue, sat, val):
         """Segment an image based on hue, saturation, and value ranges.
         Args:
             input: A BGR numpy.ndarray.
@@ -137,11 +115,11 @@ class Pipeline:
         Returns:
             A black and white numpy.ndarray.
         """
-        out = cv2.cvtColor(inputt, cv2.COLOR_BGR2HSV)
+        out = cv2.cvtColor(source, cv2.COLOR_BGR2HSV)
         return cv2.inRange(out, (hue[0], sat[0], val[0]),  (hue[1], sat[1], val[1]))
 
     @staticmethod
-    def __find_contours(inputt, external_only):
+    def __find_contours(source, external_only):
         """Sets the values of pixels in a binary image to their distance to the nearest black pixel.
         Args:
             input: A numpy.ndarray.
@@ -154,7 +132,7 @@ class Pipeline:
         else:
             mode = cv2.RETR_LIST
         method = cv2.CHAIN_APPROX_SIMPLE
-        contours, hierarchy = cv2.findContours(inputt, mode=mode, method=method)
+        contours, hierarchy = cv2.findContours(source, mode=mode, method=method)
         return contours
 
 

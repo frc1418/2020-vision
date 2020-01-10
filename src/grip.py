@@ -71,19 +71,22 @@ class Pipeline:
 
 
         #convex hull around largest contour
-        # hull = cv2.convexHull(contour, True, True, True)
+        approx = cv2.convexHull(contour, True, True, True)
         # creating convex hull object for each contour
 
         # use contour approximation
-        epsilon = 0.01*cv2.arcLength(contour,True)
-        approx = cv2.approxPolyDP(contour,epsilon,True)
+        # epsilon = 0.01*cv2.arcLength(contour,True)
+        # approx = cv2.approxPolyDP(contour,epsilon,True)
         # print(approx)
         # cv2.drawContours(source0, [approx], -1, (168, 50, 50), 3)
 
         # cv2.drawContours(source0, [contour], -1, (0, 255, 0), 3)
 
-        bottomLeft = np.roll(approx, -1, axis=0)[0][0]
-        bottomRight = np.roll(approx, -2, axis=0)[0][0]
+        index = np.where((approx==leftmost).all(axis=2))
+        approx = np.roll(approx, -index[0][0], axis=0)
+
+        bottomLeft = np.roll(approx, -5, axis=0)[0][0]
+        bottomRight = np.roll(approx, -10, axis=0)[0][0]
 
         # Find moments
 
@@ -91,8 +94,8 @@ class Pipeline:
         # cx = int(M['m10']/M['m00'])
         # cy = int(M['m01']/M['m00'])
 
-        # cv2.drawMarker(source0, tuple(bottomRight), (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, tuple(bottomLeft), (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, tuple(bottomRight), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, tuple(bottomLeft), (0, 255, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, leftmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, rightmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, (31, 70), (0, 255, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)

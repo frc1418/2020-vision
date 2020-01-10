@@ -1,7 +1,9 @@
 import cv2
-import numpy
+import numpy as np
 import math
 from enum import Enum
+import os
+import sys
 
 class Contour:
     """
@@ -12,15 +14,14 @@ class Contour:
         """initializes all values to presets or None if need to be set
         """
 
-        self.__hsv_threshold_hue = [77.6978417266187, 169.30390492359933]
-        self.__hsv_threshold_saturation = [0.0, 151.0950764006791]
-        self.__hsv_threshold_value = [50.44964028776978, 255.0]
+        self.__hsv_threshold_hue = [80.0, 170.0]
+        self.__hsv_threshold_saturation = [0.0, 150.0]
+        self.__hsv_threshold_value = [50.0, 255.0]
 
         self.hsv_threshold_output = None
 
         self.__find_contours_input = self.hsv_threshold_output
         self.__find_contours_external_only = False
-
         self.find_contours_output = None
 
 
@@ -35,10 +36,103 @@ class Contour:
         # Step Find_Contours0:
         self.__find_contours_input = self.hsv_threshold_output
         (self.find_contours_output) = self.__find_contours(self.__find_contours_input, self.__find_contours_external_only)
-
+ 
+        contour, points = self.__find_corner_points(source0, self.find_contours_output)
+        ret, rvecs, tvecs = self.__find_vecs(points)
+        print(f'{ret=}, {rvecs=}, {tvecs=}')
 
     @staticmethod
-    def __hsv_threshold(input, hue, sat, val):
+    def __find_vecs(img_points):
+        # TODO: Insert real life point values
+        real_points = np.float32([[-1.3, 0, 0], [1.3, 0, 0], [0.5, -1.5, 0], [-0.5, -1.5, 0]])
+
+        return cv2.solvePnP(
+            real_points, np.float32(img_points), 
+            np.float64([
+                [498.54399231, 0.0, 323.63196758],
+                [0.0, 497.25369582, 249.59554532],
+                [0.0, 0.0, 1.0]
+            ]),  # Camera matrix
+            np.float64([
+                1.48882516e-01, -1.63106020e-01, 6.02445681e-04,
+                1.17833144e-04, -3.89726894e-01
+            ])  # Distortion coefficients
+        )
+
+    @staticmethod
+    def __find_corner_points(source0, contours):
+        area = 0
+        contour = None  #location in list of countours that the largest countour is stored
+        for cnt in contours:
+            area1 = cv2.contourArea(cnt)
+            if area1 > area:
+                area = area1
+                contour = cnt
+        
+
+        #extreme left and right points:
+        leftmost = tuple(contour[contour[:,:,0].argmin()][0])
+        rightmost = tuple(contour[contour[:,:,0].argmax()][0])
+
+
+        #convex hull around largest contour
+        # hull = cv2.convexHull(contour, True, True, True)
+        # creating convex hull object for each contour
+
+        # use contour approximation
+        epsilon = 0.01*cv2.arcLength(contour,True)
+        approx = cv2.approxPolyDP(contour,epsilon,True)
+        # print(approx)
+        # cv2.drawContours(source0, [approx], -1, (168, 50, 50), 3)
+
+        # cv2.drawContours(source0, [contour], -1, (0, 255, 0), 3)
+
+        # Find moments
+        M = cv2.moments(contour)
+        cx = int(M['m10']/M['m00'])
+        cy = int(M['m01']/M['m00'])
+
+        left = 0
+        right = 0
+        bottom = 0
+
+        for row in approx:
+            point = row[0]
+            if point[0] < left:
+                left = point[0]
+            if point[0] > right:
+                right = point[0]
+            if point[1] > bottom:
+                bottom = point[1]
+        
+        bRight = 0
+        bLeft = 0
+        rBottom = 0
+        lBottom = 0
+        for row in approx:
+            point = row[0]
+            if point[1] > bottom - 5:
+                if point[0] < left + cx:
+                    bLeft = point[0]
+                    lBottom = point[1]
+                if point[0] > right - cx:
+                    bRight = point[0]
+                    rBottom = point[1]
+
+
+        # cv2.drawMarker(source0, (bRight, rBottom), (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, (bLeft, lBottom), (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, leftmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, rightmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # Now show the image
+        # cv2.imshow('Output', source0)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        # top left, top right, bottom right, bottom left
+        return contour, (leftmost, rightmost, (bRight, rBottom), (bLeft, lBottom))
+
+    @staticmethod
+    def __hsv_threshold(inputt, hue, sat, val):
         """Segment an image based on hue, saturation, and value ranges.
         Args:
             input: A BGR numpy.ndarray.
@@ -48,11 +142,11 @@ class Contour:
         Returns:
             A black and white numpy.ndarray.
         """
-        out = cv2.cvtColor(input, cv2.COLOR_BGR2HSV)
+        out = cv2.cvtColor(inputt, cv2.COLOR_BGR2HSV)
         return cv2.inRange(out, (hue[0], sat[0], val[0]),  (hue[1], sat[1], val[1]))
 
     @staticmethod
-    def __find_contours(input, external_only):
+    def __find_contours(inputt, external_only):
         """Sets the values of pixels in a binary image to their distance to the nearest black pixel.
         Args:
             input: A numpy.ndarray.
@@ -65,8 +159,11 @@ class Contour:
         else:
             mode = cv2.RETR_LIST
         method = cv2.CHAIN_APPROX_SIMPLE
-        im2, contours, hierarchy =cv2.findContours(input, mode=mode, method=method)
+        contours, hierarchy = cv2.findContours(inputt, mode=mode, method=method)
         return contours
 
 
-
+processor = Contour()
+path = os.path.join(os.path.dirname(sys.modules['__main__'].__file__), r'test_image.jpg')
+img = cv2.imread(path)
+processor.process(img)

@@ -44,6 +44,7 @@ class Pipeline:
         ret, rvecs, tvecs = self.__find_vecs(points)
         print(f'{ret=}, {rvecs=}, {tvecs=}')
         distance = math.sqrt(reduce(lambda x, y: x + (y**2), tvecs, 0))
+        print(f'Pythagorean distance: {distance}')
         self.table.putNumber('/vision/distance', distance)
         self.table.putNumber('/vision/angle', 0)
 
@@ -90,7 +91,7 @@ class Pipeline:
         # use contour approximation
         epsilon = 0.01*cv2.arcLength(contour,True)
         approx = cv2.approxPolyDP(contour,epsilon,True)
-        print(approx)
+        # print(approx)
         cv2.drawContours(source0, [approx], -1, (168, 50, 50), 3)
         # for index, point in enumerate(approx):
             # cv2.drawMarker(source0, tuple(point[0]), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
@@ -125,7 +126,7 @@ class Pipeline:
         # cv2.drawMarker(source0, tuple(bottomLeft), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, leftmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, rightmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        cv2.drawMarker(source0, (cx, cy), (0, 255, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, (cx, cy), (0, 255, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
 
         # Find the bottommost point in the array of approximated vertices
         bottom = 0
@@ -160,16 +161,16 @@ class Pipeline:
             bottomRightX = approx[closestPointLoc][0][0]
             bottomRightY = approx[closestPointLoc][0][1]
         
-        leftmost = [leftmost[0] - cx, cy - leftmost[1]]
-        rightmost = [rightmost[0] - cx, cy - rightmost[1]]
         # cv2.drawMarker(source0, (bottomLeftX, bottomLeftY), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, (bottomRightX, bottomRightY), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, tuple(leftmost), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, tuple(rightmost), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
 
-        cv2.imshow('Output', source0)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # cv2.imshow('Output', source0)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
         # top left, top right, bottom right, bottom left
-        return contour, (leftmost, rightmost, bottomRight, bottomLeft)
+        return contour, (leftmost, rightmost, (bottomRightX, bottomRightY), (bottomLeftX, bottomLeftY))
 
     @staticmethod
     def __hsv_threshold(source, hue, sat, val):

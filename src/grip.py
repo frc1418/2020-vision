@@ -4,6 +4,7 @@ import math
 from enum import Enum
 import os
 import sys
+from functools import reduce
 
 class Pipeline:
     """
@@ -40,11 +41,12 @@ class Pipeline:
         contour, points = self.__find_corner_points(source0, self.find_contours_output)
         ret, rvecs, tvecs = self.__find_vecs(points)
         print(f'{ret=}, {rvecs=}, {tvecs=}')
+        print(f'Pythagorean distance: {math.sqrt(reduce(lambda x, y: x + (y**2), tvecs, 0))}')
 
     @staticmethod
     def __find_vecs(img_points):
-        # TODO: Insert real life point values. Units: feet
-        real_points = np.float32([[-1.3, 0, 0], [1.3, 0, 0], [0.5, -1.5, 0], [-0.5, -1.5, 0]])
+        # top left, top right, bottom right, bottom left
+        real_points = np.float32([[-1.65625, 0.25, 0], [1.65625, 0.25, 0], [0.8177, -1.1, 0], [-0.8177, -1.1, 0]])
 
         return cv2.solvePnP(
             real_points, np.float32(img_points), 
@@ -68,6 +70,7 @@ class Pipeline:
         #extreme left and right points:
         leftmost = tuple(contour[contour[:,:,0].argmin()][0])
         rightmost = tuple(contour[contour[:,:,0].argmax()][0])
+        bottommost = tuple(contour[contour[:,:,1].argmax()][0])
 
 
         #convex hull around largest contour
@@ -90,19 +93,25 @@ class Pipeline:
 
         # Find moments
 
-        # M = cv2.moments(contour)
-        # cx = int(M['m10']/M['m00'])
-        # cy = int(M['m01']/M['m00'])
+        M = cv2.moments(contour)
+        cx = int(M['m10']/M['m00'])
+        cy = int(M['m01']/M['m00'])
 
+        # cv2.drawContours(source0, [contour], -1, (0, 255, 0), 2)
         # cv2.drawMarker(source0, tuple(bottomRight), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, tuple(bottomLeft), (0, 255, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, tuple(bottomLeft), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, leftmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, rightmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, (31, 70), (0, 255, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # Now show the image
+        # cv2.drawMarker(source0, (cx, cy), (0, 255, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+
         # cv2.imshow('Output', source0)
         # cv2.waitKey(0)
         # cv2.destroyAllWindows()
+
+        leftmost = [leftmost[0] - cx, cy - leftmost[1]]
+        rightmost = [rightmost[0] - cx, cy - rightmost[1]]
+        bottomLeft = [bottomLeft[0] - cx, cy - bottomLeft[1]]
+        bottomRight = [bottomRight[0] - cx, cy - bottomRight[1]]
 
         # top left, top right, bottom right, bottom left
         return contour, (leftmost, rightmost, bottomRight, bottomLeft)
@@ -140,6 +149,6 @@ class Pipeline:
 
 
 processor = Pipeline()
-path = os.path.join(os.path.dirname(sys.modules['__main__'].__file__), r'test_image.jpg')
+path = os.path.join(os.path.dirname(sys.modules['__main__'].__file__), r'test_image3.jpg')
 img = cv2.imread(path)
 processor.process(img)

@@ -45,7 +45,7 @@ class Pipeline:
         print(f'{ret=}, {rvecs=}, {tvecs=}')
         distance = math.sqrt(reduce(lambda x, y: x + (y**2), tvecs, 0))
         self.table.putNumber('/vision/distance', distance)
-        self.table.putNumber('/vision/angle', )
+        self.table.putNumber('/vision/angle', 0)
 
     @staticmethod
     def __find_vecs(img_points):
@@ -78,22 +78,41 @@ class Pipeline:
 
 
         #convex hull around largest contour
-        approx = cv2.convexHull(contour, True, True, True)
+        # approx = cv2.convexHull(contour, True, True, True)
         # creating convex hull object for each contour
 
-        # use contour approximation
-        # epsilon = 0.01*cv2.arcLength(contour,True)
-        # approx = cv2.approxPolyDP(contour,epsilon,True)
-        # print(approx)
-        # cv2.drawContours(source0, [approx], -1, (168, 50, 50), 3)
+        # TODO:
+        # Find the bottommost point in the array of approximated vertices
+        # Find the points 1 before and 1 after this point in the array
+        # Use the point closest to the bottom most point on the y-axis
+        
 
+        # use contour approximation
+        epsilon = 0.01*cv2.arcLength(contour,True)
+        approx = cv2.approxPolyDP(contour,epsilon,True)
+        print(approx)
+        cv2.drawContours(source0, [approx], -1, (168, 50, 50), 3)
+        # for index, point in enumerate(approx):
+            # cv2.drawMarker(source0, tuple(point[0]), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+            # cv2.putText(source0, str(index), tuple(point[0]), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.5, (0, 255, 0), thickness=1)
         # cv2.drawContours(source0, [contour], -1, (0, 255, 0), 3)
 
         index = np.where((approx==leftmost).all(axis=2))
         approx = np.roll(approx, -index[0][0], axis=0)
 
-        bottomLeft = np.roll(approx, -5, axis=0)[0][0]
-        bottomRight = np.roll(approx, -10, axis=0)[0][0]
+        bottomLeft = np.roll(approx, -2, axis=0)[0][0]
+        bottomRight = np.roll(approx, -1, axis=0)[0][0]
+
+        mask = np.zeros(img.shape, np.uint8)
+        cv2.drawContours(mask, [contour], -1, (255, 255, 255),1)
+        mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+
+        # corners = cv2.goodFeaturesToTrack(cv2.cvtColor(source0, cv2.COLOR_BGR2GRAY), 4, 0.005, 5, mask=mask)
+        # corners = np.int0(corners)
+        # cv2.drawContours(source0, [mask], -1, (0, 0, 255))
+        # for index, corner in enumerate(corners):
+            # cv2.drawMarker(source0, tuple(corner[0]), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+            # cv2.putText(source0, str(index), tuple(corner[0]), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.5, (0, 255, 0), thickness=1)
 
         # Find moments
 
@@ -106,17 +125,49 @@ class Pipeline:
         # cv2.drawMarker(source0, tuple(bottomLeft), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, leftmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
         # cv2.drawMarker(source0, rightmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, (cx, cy), (0, 255, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        cv2.drawMarker(source0, (cx, cy), (0, 255, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
 
-        # cv2.imshow('Output', source0)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
+        # Find the bottommost point in the array of approximated vertices
+        bottom = 0
+        for index, i in enumerate(approx):
+            if i[0][1] > bottom:
+                lowestPointLoc = index
+                bottom = i[0][1]
+        # find the points before and after the bottomost point in the array 
+        if lowestPointLoc != 0:
+            pointBeforeLoc = lowestPointLoc - 1
+        else:
+            pointBeforeLoc = len(approx) - 1
+        if lowestPointLoc != len(approx) - 1:
+            pointAfterLoc = lowestPointLoc + 1
+        else:
+            pointAfterLoc = 0
+        # Use the point closest to the bottom most point on the y-axis
+        if approx[pointBeforeLoc][0][1] > approx[pointAfterLoc][0][1]:
+            closestPointLoc = pointBeforeLoc
+        else:
+            closestPointLoc = pointAfterLoc
 
+        #find bottomleft and bottomright
+        if approx[closestPointLoc][0][0] < approx[lowestPointLoc][0][0]:
+            bottomLeftX = approx[closestPointLoc][0][0]
+            bottomLeftY = approx[closestPointLoc][0][1]
+            bottomRightX = approx[lowestPointLoc][0][0]
+            bottomRightY = approx[lowestPointLoc][0][1]
+        else:
+            bottomLeftX = approx[lowestPointLoc][0][0]
+            bottomLeftY = approx[lowestPointLoc][0][1]
+            bottomRightX = approx[closestPointLoc][0][0]
+            bottomRightY = approx[closestPointLoc][0][1]
+        
         leftmost = [leftmost[0] - cx, cy - leftmost[1]]
         rightmost = [rightmost[0] - cx, cy - rightmost[1]]
-        bottomLeft = [bottomLeft[0] - cx, cy - bottomLeft[1]]
-        bottomRight = [bottomRight[0] - cx, cy - bottomRight[1]]
+        # cv2.drawMarker(source0, (bottomLeftX, bottomLeftY), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
+        # cv2.drawMarker(source0, (bottomRightX, bottomRightY), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
 
+        cv2.imshow('Output', source0)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         # top left, top right, bottom right, bottom left
         return contour, (leftmost, rightmost, bottomRight, bottomLeft)
 
@@ -160,4 +211,3 @@ processor = Pipeline(table)
 path = os.path.join(os.path.dirname(sys.modules['__main__'].__file__), r'test_image3.jpg')
 img = cv2.imread(path)
 processor.process(img)
-

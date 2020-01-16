@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 try:
     import cscore as cs
     from cscore import CameraServer, VideoSource
@@ -16,10 +17,12 @@ from functools import reduce
 
 import cv2
 import numpy as np
-from networktables import NetworkTables
+from networktables import NetworkTables, NetworkTablesInstance
 from networktables.util import ntproperty
 
-from scipy.spatial.transform import Rotation
+import json
+
+# from scipy.spatial.transform import Rotation
 
 
 class Pipeline:
@@ -63,11 +66,11 @@ class Pipeline:
         distance = math.sqrt(reduce(lambda x, y: x + (y**2), tvecs, 0))
         print(f'Pythagorean distance: {distance} (feet)')
         
-        r = Rotation.from_rotvec(rvecs.ravel())
-        rot = r.as_euler('xyz', degrees=True)
+        # r = Rotation.from_rotvec(rvecs.ravel())
+        # rot = r.as_euler('xyz', degrees=True)
         self.table.putNumber('/vision/distance', distance)
-        self.table.putNumber('/vision/angle_horizontal', rot[1])
-        self.table.putNumber('/vision/angle_vertical', rot[2])
+        self.table.putNumber('/vision/angle_horizontal', 0)
+        self.table.putNumber('/vision/angle_vertical', 0)
 
     @staticmethod
     def __find_vecs(img_points):

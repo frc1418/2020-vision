@@ -5,24 +5,16 @@ try:
     CSCORE = True
 except ImportError:
     CSCORE = False
-    print('Import Error: Failed to import cscore. It\'s alright though.')
 
-import cv2
-import numpy as np
+import json
 import math
 import os
 import sys
-from enum import Enum
-from functools import reduce
 
 import cv2
 import numpy as np
 from networktables import NetworkTables, NetworkTablesInstance
 from networktables.util import ntproperty
-
-import json
-
-# from scipy.spatial.transform import Rotation
 
 
 class Pipeline:
@@ -61,16 +53,26 @@ class Pipeline:
         (self.find_contours_output) = self.__find_contours(self.__find_contours_input, self.__find_contours_external_only)
  
         contour, points = self.__find_corner_points(source0, self.find_contours_output)
+
+        # Contour will be none if a valid contour matching the hexagonal shape was not found
+        if contour is None:
+            return source0
+
+        cv2.drawContours(source0, [contour], -1, (0, 255, 0), 2)
+        
         ret, rvecs, tvecs = self.__find_vecs(points)
         #print(f'{ret=}, {rvecs=}, {tvecs=}')
-        distance = math.sqrt(reduce(lambda x, y: x + (y**2), tvecs, 0))
-        print(f'Pythagorean distance: {distance} (feet)')
+        # pythagorean_distance = math.sqrt(sum([x**2 for x in tvecs]))
+        plane_distance = math.sqrt(sum(x**2 for x in tvecs[1:]))
+
+        rotation_matrix = cv2.Rodrigues(rvecs.ravel())[0]
+        if self.isRotationMatrix(rotation_matrix):
+            rot = self.rotationMatrixToEulerAngles(rotation_matrix)
+            rot = [math.degrees(angle) for angle in rot]
+            self.table.putNumber('/angle_horizontal', rot[1])
+            self.table.putNumber('/angle_vertical', rot[2])
+        self.table.putNumber('/plane_distance', plane_distance)
         
-        # r = Rotation.from_rotvec(rvecs.ravel())
-        # rot = r.as_euler('xyz', degrees=True)
-        self.table.putNumber('/vision/distance', distance)
-        self.table.putNumber('/vision/angle_horizontal', 0)
-        self.table.putNumber('/vision/angle_vertical', 0)
 
     @staticmethod
     def __find_vecs(img_points):
@@ -104,6 +106,15 @@ class Pipeline:
         # use contour approximation
         epsilon = self.approx_constant * cv2.arcLength(contour,True)
         approx = cv2.approxPolyDP(contour,epsilon,True)
+
+        if len(approx) > 8 or len(approx) < 6:
+            return None, None 
+
+        # Other possible methods of finding corners:
+        # cv2.goodFeaturesToTrack
+        # cv2.convexHull
+        # cv2.convexHull -> cv2.approxPolyDP
+
         # cv2.drawContours(source0, [approx], -1, (168, 50, 50), 3)
 
         # corners = cv2.goodFeaturesToTrack(cv2.cvtColor(source0, cv2.COLOR_BGR2GRAY), 4, 0.005, 5, mask=mask)
@@ -112,21 +123,6 @@ class Pipeline:
         # for index, corner in enumerate(corners):
             # cv2.drawMarker(source0, tuple(corner[0]), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
             # cv2.putText(source0, str(index), tuple(corner[0]), cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.5, (0, 255, 0), thickness=1)
-
-        # Find moments
-
-        # M = cv2.moments(contour)
-        # cx = int(M['m10']/M['m00'])
-        # cy = int(M['m01']/M['m00'])
-
-        # cv2.drawContours(source0, [contour], -1, (0, 255, 0), 2)
-        # cv2.drawMarker(source0, tuple(bottomRight), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, tuple(bottomLeft), (0, 0, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, leftmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, rightmost, (255, 0, 0), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-        # cv2.drawMarker(source0, (cx, cy), (0, 255, 255), cv2.MARKER_DIAMOND, markerSize=5, thickness=2)
-
-        # Find the bottommost point in the array of approximated vertices
         bottom = 0
         lowestPointLoc = 0
         for index, i in enumerate(approx):
@@ -195,6 +191,39 @@ class Pipeline:
         contours, hierarchy = cv2.findContours(source, mode=mode, method=method)
         return contours
 
+    # Checks if a matrix is a valid rotation matrix.
+    @staticmethod
+    def isRotationMatrix(R) :
+        Rt = np.transpose(R)
+        shouldBeIdentity = np.dot(Rt, R)
+        I = np.identity(3, dtype = R.dtype)
+        n = np.linalg.norm(I - shouldBeIdentity)
+        return n < 1e-6
+    
+    
+    # Calculates rotation matrix to euler angles
+    # The result is the same as MATLAB except the order
+    # of the euler angles ( x and z are swapped ).
+    @staticmethod
+    def rotationMatrixToEulerAngles(R) :
+    
+        assert(Pipeline.isRotationMatrix(R))
+        
+        sy = math.sqrt(R[0,0] * R[0,0] +  R[1,0] * R[1,0])
+        
+        singular = sy < 1e-6
+    
+        if  not singular :
+            x = math.atan2(R[2,1] , R[2,2])
+            y = math.atan2(-R[2,0], sy)
+            z = math.atan2(R[1,0], R[0,0])
+        else :
+            x = math.atan2(-R[1,2], R[1,1])
+            y = math.atan2(-R[2,0], sy)
+            z = 0
+    
+        return np.array([x, y, z])
+
 
 # As a client to connect to a robot
 NetworkTables.initialize(server='roborio-1418-frc.local')
@@ -202,7 +231,7 @@ table = NetworkTables.getTable('/')
 
 if CSCORE == False:
     processor = Pipeline(table)
-    path = os.path.join(os.path.dirname(sys.modules['__main__'].__file__), r'test_image2.jpg')
+    path = os.path.join(os.path.dirname(sys.modules['__main__'].__file__), r'test_image3.jpg')
     img = cv2.imread(path)
     processor.process(img)
 else:
@@ -338,6 +367,8 @@ else:
         # Allocating new images is very expensive, always try to preallocate
         img = np.zeros(shape=(IMAGE_HEIGHT, IMAGE_WIDTH, 3), dtype=np.uint8)
 
+        pipeline = Pipeline(table)
+
         # loop forever
         while True:
 
@@ -352,9 +383,8 @@ else:
                 # Skip the rest of the current iteration
                 continue
 
-            mask = threshold_frame(frame)
-            contours = find_contours(mask)
-            print("Found %d contours initially." % len(contours))
-            processed_frame = find_targets(contours, frame)
+            
+            processed_frame = pipeline.process(frame)
+
             # (optional) send image back to the dashboard
             output_stream.putFrame(processed_frame)
